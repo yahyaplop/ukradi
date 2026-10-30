@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>🥚 Укради яйцо — Мультяшный 3D</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body {
+    overflow:hidden; font-family:'Trebuchet MS',sans-serif; background:#87CEEB;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+    overscroll-behavior:none;
+  }
+  canvas { display:block; cursor:grab; touch-action:none; }
+  canvas:active { cursor:grabbing; }
+
+  /* --- UI --- */
+  #ui {
+    position:fixed; top:14px; left:14px; color:#fff;
+    text-shadow:2px 2px 0px #000; font-size:18px; font-weight:bold;
+    z-index:10; line-height:1.7; pointer-events:none;
+    background:rgba(0,0,0,0.5); padding:14px 18px; border-radius:14px;
+    backdrop-filter:blur(8px); border:3px solid #FFEB3B;
+  }
+  #ui .row { display:flex; justify-content:space-between; gap:14px; margin:3px 0; }
+  #ui .val { color:#FFEB3B; }
+  #ui .val.green { color:#4CAF50; }
+  #ui .val.purple { color:#CE93D8; }
+
+  #biomeName {
+    position:fixed; top:20px; left:50%; transform:translateX(-50%) translateY(-10px);
+    color:#fff; text-shadow:3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+    font-size:36px; font-weight:900; z-index:10; pointer-events:none;
+    opacity:0; transition:opacity .6s, transform .6s;
+    letter-spacing:2px;
+  }
+
+  #roadmap {
+    position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+    display:flex; gap:6px; z-index:10; padding:10px 16px;
+    background:rgba(0,0,0,0.5); border-radius:30px;
+    border:3px solid #fff; pointer-events:none;
+  }
+  #roadmap .dot {
+    width:14px; height:14px; border-radius:50%;
+    transition:all .3s; border:2px solid #000;
+  }
+  #roadmap .dot.active {
+    transform:scale(1.7); border-color:#fff;
+    box-shadow:0 0 12px currentColor;
+  }
+
+  #crosshair {
+    position:fixed; top:50%; left:50%; width:8px; height:8px;
+    background:#fff; border-radius:50%; transform:translate(-50%,-50%);
+    z-index:10; border:2px solid #000; pointer-events:none;
+  }
+  body.is-touch #crosshair { display: none; }
+
+  #bar {
+    position:fixed; top:50%; left:50%; transform:translate(-50%, 40px);
+    width:240px; height:24px; background:rgba(0,0,0,0.7);
+    border-radius:12px; display:none; z-index:10; overflow:hidden;
+    border:3px solid #fff;
+  }
+  #bar > div {
+    height:100%; width:0%;
+    background:#4CAF50; transition:width .05s;
+  }
+
+  #toast {
+    position:fixed; top:90px; left:50%; transform:translateX(-50%);
+    background:#fff; color:#000; padding:14px 28px; border-radius:14px; 
+    font-size:20px; font-weight:bold;
+    opacity:0; transition:opacity .3s, transform .3s;
+    z-index:11; pointer-events:none; white-space:nowrap;
+    border:4px solid #000; box-shadow:6px 6px 0 #000;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  #flash {
+    position:fixed; inset:0; background:#FF1744; opacity:0;
+    pointer-events:none; z-index:30; transition:opacity .4s;
+  }
+  #flash.show { opacity:0.6; }
+
+  #loading {
+    position:fixed; inset:0; background:#87CEEB; color:#000;
+    display:flex; align-items:center; justify-content:center;
+    font-size:24px; font-weight:bold; z-index:100; transition:opacity .6s;
+  }
+  #loading.done { opacity:0; pointer-events:none; }
+
+  /* --- Кнопки меню --- */
+  #shop-btn, #inv-btn {
+    position:fixed; top:14px; z-index:20;
+    background:#FF9800; border:3px solid #000; color:#fff; padding:14px 22px; border-radius:14px;
+    font-size:18px; font-weight:900; cursor:pointer; box-shadow:4px 4px 0 #000;
+  }
+  #shop-btn { right:14px; }
+  #inv-btn { right:150px; background:#9C27B0; }
+  #shop-btn:active, #inv-btn:active { transform:translate(3px, 3px); box-shadow:1px 1px 0 #000; }
+
+  #hatch-indicator {
+    position:fixed; top:90px; right:14px; z-index:15;
+    background:#4CAF50; color:#fff; padding:12px 20px;
+    border-radius:12px; font-weight:900; cursor:pointer;
+    display:none; border:3px solid #000; box-shadow:4px 4px 0 #000;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  #hatch-indicator.show { display:block; }
+
+  .toolbar { position:fixed; bottom:70px; right:14px; z-index:15; display:flex; flex-direction:column; gap:8px; }
+  .tool-btn {
+    width:60px; height:60px; border-radius:14px; border:3px solid #000;
+    background:#fff; color:#000; font-size:26px; cursor:pointer; font-weight:bold;
+    display:flex; align-items:center; justify-content:center; box-shadow:4px 4px 0 #000;
+  }
+  .tool-btn:active { transform:translate(3px, 3px); box-shadow:1px 1px 0 #000; }
+
+  #tutorial {
+    position:fixed; bottom:120px; left:50%; transform:translateX(-50%);
+    background:#FFEB3B; color:#000; padding:12px 22px; font-weight:bold;
+    border-radius:14px; font-size:16px; z-index:15; text-align:center;
+    border:3px solid #000; box-shadow:4px 4px 0 #000; max-width:400px;
+  }
+  body.is-touch #tutorial { display: none; }
+
+  #treadmill-prompt {
+    position:fixed; top:50%; left:50%; transform:translate(-50%, -70px);
+    background:#fff; color:#000; padding:10px 20px; font-weight:bold;
+    border-radius:12px; font-size:18px; z-index:15;
+    border:3px solid #000; box-shadow:3px 3px 0 #000; opacity:0; transition:opacity .2s; pointer-events:none;
+  }
+  #treadmill-prompt.show { opacity:1; }
+
+  /* --- Мобильное управление --- */
+  #mobile-controls { position:fixed; inset:0; z-index:100; pointer-events:none; display:none; }
+  body.is-touch #mobile-controls { display: block; }
+
+  #joystick {
+    position:fixed; bottom:40px; left:30px; width:140px; height:140px; border-radius:50%;
+    background:rgba(0,0,0,0.4); border:4px solid #000;
+    pointer-events:auto; touch-action:none;
+  }
+  #joystick-stick {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:60px; height:60px; border-radius:50%;
+    background:#FFEB3B; border:4px solid #000; box-shadow:2px 2px 0 #000; pointer-events:none;
+  }
+  
+  #action-buttons {
+    position:fixed; bottom:40px; right:30px; display:flex; flex-direction:column; gap:10px; pointer-events:auto;
+  }
+  .action-btn {
+    width:60px; height:60px; border-radius:50%; border:4px solid #000;
+    font-size:24px; font-weight:bold; color:#fff; display:flex; align-items:center; justify-content:center;
+    box-shadow:3px 3px 0 #000; transition:transform .1s; touch-action:none; cursor:pointer;
+  }
+  .action-btn:active { transform:translate(2px, 2px); box-shadow:1px 1px 0 #000; }
+  
+  #btn-e { background:#4CAF50; width:80px; height:80px; font-size:32px; align-self:flex-end; margin-top:10px; }
+  #btn-q { background:#FF9800; }
+  #btn-b { background:#E53935; }
+  #btn-t { background:#795548; }
+  #btn-f { background:#2196F3; }
+  #mobile-controls .row-btns { display:flex; gap:10px; justify-content:flex-end; }
+
+  /* --- Панели --- */
+  .panel {
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:#FFF; color:#000; border-radius:20px; padding:26px 30px;
+    z-index:110; display:none; min-width:520px; max-width:640px;
+    border:5px solid #000; box-shadow:10px 10px 0 rgba(0,0,0,0.5);
+    max-height:80vh; overflow-y:auto;
+  }
+  .panel.open { display:block; animation:panelIn .25s ease; }
+  @keyframes panelIn { from { opacity:0; transform:translate(-50%,-50%) scale(0.9); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
+  .panel h2 { font-size:28px; margin-bottom:18px; text-align:center; color:#000; font-weight:900; }
+  .panel h3 { font-size:20px; margin:14px 0 8px; color:#000; border-bottom:3px solid #000; padding-bottom:4px; }
+  .panel .close-btn {
+    position:absolute; top:12px; right:16px; background:#E53935;
+    border:3px solid #000; color:#fff; font-size:20px; width:36px; height:36px;
+    border-radius:50%; cursor:pointer; font-weight:900; box-shadow:2px 2px 0 #000;
+  }
+
+  .pen-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:10px; }
+  .pen-slot {
+    aspect-ratio:1; background:#F0F0F0; border-radius:12px;
+    border:3px solid #000; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:6px;
+    box-shadow:2px 2px 0 rgba(0,0,0,0.2);
+  }
+  .pen-slot.filled { background:#E8F5E9; }
+  .pen-slot .icon { font-size:32px; margin-bottom:4px; }
+  .pen-slot .inc { font-size:12px; color:#2E7D32; font-weight:900; }
+
+  .incubator-item {
+    background:#F0F0F0; border:3px solid #000; border-radius:10px;
+    padding:10px; margin-bottom:8px; font-weight:bold;
+  }
+  .progress-bg { background:#CCC; height:10px; border-radius:5px; border:2px solid #000; overflow:hidden; margin-top:4px; }
+  .progress-fill { background:#4CAF50; height:100%; width:0%; }
+
+  @media (max-width: 900px) {
+    #ui { font-size:14px; padding:10px; }
+    .panel { min-width:auto; width:90vw; padding:20px 18px; }
+    #shop-btn, #inv-btn { padding:10px 14px; font-size:14px; }
+    #inv-btn { right:120px; }
+  }
+</style>
+</head>
+<body>
+<div id="loading">🥚 Загрузка...</div>
+
+<div id="ui">
+  <div class="row"><span>💰 Деньги:</span><span class="val" id="money">0</span></div>
+  <div class="row"><span>⚡ Скорость:</span><span class="val" id="speed">6.0</span></div>
+  <div class="row"><span>🥚 Яйцо:</span><span class="val" id="egg">нет</span></div>
+  <div class="row"><span>🐾 Питомцы:</span><span class="val green" id="pets">0/3</span></div>
+  <div class="row"><span>📈 Доход/сек:</span><span class="val purple" id="income">0</span></div>
+</div>
+
+<button id="shop-btn">🛒</button>
+<button id="inv-btn">🎒</button>
+<div id="hatch-indicator">🥚 Забрать!</div>
+
+<div class="toolbar">
+  <button class="tool-btn" id="tool-bat">🏏</button>
+  <button class="tool-btn" id="tool-trap">🪤</button>
+</div>
+
+<div id="biomeName"></div>
+<div id="crosshair"></div>
+<div id="bar"><div id="barfill"></div></div>
+<div id="roadmap"></div>
+<div id="treadmill-prompt">Нажми <b>Q</b>, чтобы встать на дорожку</div>
+<div id="tutorial">🎯 Укради яйцо (E) → Отнеси в синий круг → Забери питомца!</div>
+
+<div id="toast"></div>
+<div id="flash"></div>
+
+<div id="mobile-controls">
+  <div id="joystick"><div id="joystick-stick"></div></div>
+  <div id="action-buttons">
+    <div class="row-btns">
+      <button class="action-btn" id="btn-q">🏃</button>
+      <button class="action-btn" id="btn-f">⚡</button>
+    </div>
+    <button class="action-btn" id="btn-e">🥚</button>
+  </div>
+</div>
+
+<div class="panel" id="pen-panel">
+  <button class="close-btn" onclick="document.getElementById('pen-panel').classList.remove('open')">×</button>
+  <h2>🐾 Загон</h2>
+  <div class="pen-grid" id="pen-grid"></div>
+  <h3>📦 Инкубатор</h3>
+  <div id="incubator-list"></div>
+</div>
+
+<script>
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('gesturechange', e => e.preventDefault());
+document.addEventListener('gestureend', e => e.preventDefault());
+
+const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if (isTouch) document.body.classList.add('is-touch');
+
+window.addEventListener('error', e => {
+  const el = document.getElementById('loading');
+  if (el) el.innerHTML = `<div style="color:red;">Ошибка: ${e.message}</div>`;
+});
+</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================================================
+   1. СЦЕНА
+============================================================ */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.Fog(0x87CEEB, 50, 150);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.BasicShadowMap; 
+document.body.appendChild(renderer.domElement);
+
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.9);
+scene.add(hemiLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(30, 50, 20);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.left = -60;
+dirLight.shadow.camera.right = 60;
+dirLight.shadow.camera.top = 60;
+dirLight.shadow.camera.bottom = -60;
+dirLight.shadow.bias = -0.001;
+scene.add(dirLight);
+
+/* ============================================================
+   2. МАТЕРИАЛЫ
+============================================================ */
+const colors = [0x000000, 0x666666, 0xCCCCCC, 0xFFFFFF];
+const gradientMap = new THREE.DataTexture(new Uint8Array(colors.length * 4), colors.length, 1, THREE.RGBAFormat);
+const data = new Uint8Array(colors.length * 4);
+for (let i = 0; i < colors.length; i++) {
+  data[i * 4 + 0] = (colors[i] >> 16) & 255;
+  data[i * 4 + 1] = (colors[i] >> 8) & 255;
+  data[i * 4 + 2] = colors[i] & 255;
+  data[i * 4 + 3] = 255;
+}
+gradientMap.image.data = data;
+gradientMap.needsUpdate = true;
+
+function createToonMat(color) {
+  return new THREE.MeshToonMaterial({ color: color, gradientMap: gradientMap });
+}
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+
+function addOutline(mesh, scale = 1.05) {
+  const outline = new THREE.Mesh(mesh.geometry, outlineMat);
+  outline.scale.multiplyScalar(scale);
+  mesh.add(outline);
+}
+
+/* ============================================================
+   3. БИОМЫ
+============================================================ */
+const BIOME_LEN = 40;
+const BASE_Z = 0;
+const ROAD_WIDTH = 12;
+
+const biomeDefs = [
+  { name:'🌲 Лес', req:0, col:0x2E7D32, sky:0x87CEEB, fog:0xC8E6C9, guard:'chicken', egg:0xFFF8E1, petEmoji:'🐔', petIncome:2, hatchTime:10 },
+  { name:'🏞️ Озеро', req:900, col:0x1565C0, sky:0x64B5F6, fog:0xB3E5FC, guard:'swan', egg:0xB3E5FC, petEmoji:'🦢', petIncome:5, hatchTime:20 },
+  { name:'🏜️ Пустыня', req:10000, col:0xF9A825, sky:0xFFCA28, fog:0xFFE082, guard:'scorpion', egg:0xFFE082, petEmoji:'🦂', petIncome:12, hatchTime:30 },
+  { name:'🌴 Джунгли', req:40000, col:0x1B5E20, sky:0x33691E, fog:0x81C784, guard:'tiger', egg:0xA5D6A7, petEmoji:'🐯', petIncome:28, hatchTime:45 },
+  { name:'❄️ Снег', req:170000, col:0xF5F5F5, sky:0xE0E0E0, fog:0xFFFFFF, guard:'yeti', egg:0xE1F5FE, petEmoji:'❄️', petIncome:65, hatchTime:60 },
+  { name:'🌋 Вулкан', req:700000, col:0x3E2723, sky:0x5D4037, fog:0xFF7043, guard:'cerberus', egg:0xFF8A65, petEmoji:'🔥', petIncome:150, hatchTime:90 },
+  { name:'🌊 Океан', req:2500000, col:0x0D1B2A, sky:0x0A1929, fog:0x0288D1, guard:'beluga', egg:0x90CAF9, petEmoji:'🐋', petIncome:350, hatchTime:120 },
+  { name:'🦕 Динозавры', req:18000000, col:0x8D6E63, sky:0x6D4C41, fog:0xD7CCC8, guard:'trex', egg:0xD7CCC8, petEmoji:'🦖', petIncome:800, hatchTime:180 },
+  { name:'🌌 Космос', req:700000000, col:0x1A0033, sky:0x0A001A, fog:0x311B92, guard:'skeleton', egg:0xCE93D8, petEmoji:'🦄', petIncome:2000, hatchTime:240 },
+  { name:'🌸 Сакура', req:2500000000, col:0xF48FB1, sky:0xFFCDD2, fog:0xF8BBD0, guard:'oni', egg:0xF8BBD0, petEmoji:'🦊', petIncome:5000, hatchTime:300 },
+];
+
+const biomes = biomeDefs.map((d, i) => ({
+  ...d, index: i,
+  zStart: BASE_Z + 12 + i * BIOME_LEN,
+  zEnd:   BASE_Z + 12 + (i+1) * BIOME_LEN,
+  zCenter: BASE_Z + 12 + (i+0.5) * BIOME_LEN,
+  eggTaken: false, guardChasing: false
+}));
+const TOTAL_LEN = BASE_Z + 12 + biomes.length * BIOME_LEN + 30;
+
+/* ============================================================
+   4. МИР
+============================================================ */
+const roadGeo = new THREE.BoxGeometry(ROAD_WIDTH, 1, TOTAL_LEN);
+const road = new THREE.Mesh(roadGeo, createToonMat(0x95A5A6));
+road.position.set(0, -0.55, TOTAL_LEN/2);
+road.receiveShadow = true;
+scene.add(road);
+
+function buildBiome(b) {
+  const group = new THREE.Group();
+  
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(80, 1, BIOME_LEN), createToonMat(b.col));
+  floor.position.set(0, -0.5, b.zCenter); floor.receiveShadow = true; group.add(floor);
+
+  const nest = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.6, 8, 16), createToonMat(0x6D4C41));
+  nest.rotation.x = -Math.PI/2; nest.position.set(0, 0.6, b.zCenter); nest.castShadow = true;
+  addOutline(nest); group.add(nest);
+
+  const egg = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 16), createToonMat(b.egg));
+  egg.scale.set(1, 1.4, 1); egg.position.set(0, 1.8, b.zCenter); egg.castShadow = true;
+  addOutline(egg); group.add(egg);
+
+  b.egg = egg;
+  b.nestPos = new THREE.Vector3(0, 0, b.zCenter);
+
+  const guard = buildGuard(b.guard);
+  guard.position.set(8, 0, b.zCenter + 6);
+  b.guardHome = guard.position.clone();
+  b.guard = guard;
+  group.add(guard);
+
+  const rand = (() => { let s = b.index * 100 + 5; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; })();
+  for (let i = 0; i < 10; i++) {
+    const side = rand() > 0.5 ? 1 : -1;
+    const x = side * (ROAD_WIDTH/2 + 2 + rand()*20);
+    const z = b.zStart + rand()*BIOME_LEN;
+    if (b.index % 2 === 0) {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 4, 6), createToonMat(0x5D4037));
+      trunk.position.set(x, 2, z); trunk.castShadow = true; addOutline(trunk); group.add(trunk);
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(2.5, 5, 6), createToonMat(0x2E7D32));
+      crown.position.set(x, 5.5, z); crown.castShadow = true; addOutline(crown); group.add(crown);
+    } else {
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.5), createToonMat(0x7F8C8D));
+      rock.position.set(x, 1, z); rock.rotation.set(rand(), rand(), rand()); rock.castShadow = true; addOutline(rock); group.add(rock);
+    }
+  }
+
+  scene.add(group);
+}
+biomes.forEach(buildBiome);
+
+/* ============================================================
+   5. СТРАЖИ
+============================================================ */
+function buildGuard(type) {
+  const g = new THREE.Group();
+  const addPart = (geo, col, x, y, z, scale = 1) => {
+    const m = new THREE.Mesh(geo, createToonMat(col));
+    m.position.set(x, y, z); m.scale.setScalar(scale); m.castShadow = true;
+    addOutline(m, 1.08); g.add(m); return m;
+  };
+  if (type === 'chicken') {
+    addPart(new THREE.SphereGeometry(2, 12, 12), 0xFFFFFF, 0, 2.5, 0).scale.set(1, 1.2, 1.3);
+    addPart(new THREE.SphereGeometry(1.2, 12, 12), 0xFFFFFF, 0, 4.8, 1.2);
+    addPart(new THREE.ConeGeometry(0.5, 1.2, 6), 0xE53935, 0, 6, 1.2);
+  } else if (type === 'scorpion') {
+    addPart(new THREE.SphereGeometry(2, 12, 12), 0x8D6E63, 0, 1.5, 0).scale.set(1.3, 0.7, 1.5);
+    addPart(new THREE.CylinderGeometry(0.5, 0.7, 4, 6), 0x6D4C41, 0, 3, -2).rotation.x = -0.5;
+    addPart(new THREE.SphereGeometry(0.8, 8, 8), 0xE53935, 0, 4.5, -3);
+  } else if (type === 'yeti') {
+    addPart(new THREE.SphereGeometry(2.5, 12, 12), 0xF5F5F5, 0, 3, 0).scale.set(1.2, 1.4, 1);
+    addPart(new THREE.SphereGeometry(1.5, 12, 12), 0xF5F5F5, 0, 6, 0.5);
+  } else {
+    // Универсальный страж для остальных биомов
+    addPart(new THREE.SphereGeometry(2.5, 12, 12), 0x9C27B0, 0, 2.5, 0).scale.set(1.2, 1.5, 1.2);
+    addPart(new THREE.SphereGeometry(1.5, 12, 12), 0x4A148C, 0, 5.5, 1);
+    addPart(new THREE.ConeGeometry(0.4, 1, 6), 0xE53935, -0.7, 7, 1);
+    addPart(new THREE.ConeGeometry(0.4, 1, 6), 0xE53935, 0.7, 7, 1);
+    addPart(new THREE.SphereGeometry(0.2, 8, 8), 0xFFEB3B, -0.4, 5.8, 2.2);
+    addPart(new THREE.SphereGeometry(0.2, 8, 8), 0xFFEB3B, 0.4, 5.8, 2.2);
+  }
+  return g;
+}
+
+/* ============================================================
+   6. БАЗА, ЗАГОН И ИГРОК
+============================================================ */
+const BASE_POS = new THREE.Vector3(0, 0, BASE_Z - 5);
+const SAFE_RADIUS = 10;
+
+const basePlate = new THREE.Mesh(new THREE.CylinderGeometry(SAFE_RADIUS, SAFE_RADIUS, 1, 32), createToonMat(0x90CAF9));
+basePlate.position.set(0, -0.5, BASE_Z - 5); basePlate.receiveShadow = true; scene.add(basePlate);
+addOutline(basePlate);
+const ring = new THREE.Mesh(new THREE.TorusGeometry(SAFE_RADIUS, 0.3, 8, 32), createToonMat(0x00E676));
+ring.rotation.x = -Math.PI/2; ring.position.set(0, 0.1, BASE_Z - 5); scene.add(ring);
+
+const TREADMILL_POS = new THREE.Vector3(14, 0, BASE_Z - 8);
+const treadmill = new THREE.Mesh(new THREE.BoxGeometry(6, 1, 12), createToonMat(0x212121));
+treadmill.position.set(TREADMILL_POS.x, -0.4, TREADMILL_POS.z); treadmill.receiveShadow = true; scene.add(treadmill);
+
+const PEN_CENTER = new THREE.Vector3(-20, 0, BASE_Z - 10);
+const PEN_RADIUS = 8;
+const penGroup = new THREE.Group(); penGroup.position.copy(PEN_CENTER); scene.add(penGroup);
+const penFloor = new THREE.Mesh(new THREE.CylinderGeometry(PEN_RADIUS, PEN_RADIUS, 1, 32), createToonMat(0x8BC34A));
+penFloor.position.y = -0.5; penFloor.receiveShadow = true; penGroup.add(penFloor); addOutline(penFloor);
+for (let i = 0; i < 12; i++) {
+  const a = (i / 12) * Math.PI * 2;
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 2.5, 6), createToonMat(0x5D4037));
+  post.position.set(Math.cos(a)*PEN_RADIUS, 1.25, Math.sin(a)*PEN_RADIUS); 
+  post.castShadow = true; penGroup.add(post); addOutline(post);
+}
+
+const player = new THREE.Group();
+const playerVisuals = new THREE.Group();
+player.add(playerVisuals);
+
+const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.5, 0.8), createToonMat(0x3498DB));
+torso.position.y = 1.75; torso.castShadow = true; addOutline(torso); playerVisuals.add(torso);
+const head = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.4, 1.4), createToonMat(0xFFCC99));
+head.position.y = 3.3; head.castShadow = true; addOutline(head); playerVisuals.add(head);
+const hair = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 1.5), createToonMat(0x3E2723));
+hair.position.y = 4.1; hair.castShadow = true; addOutline(hair); playerVisuals.add(hair);
+
+const eyesGroup = new THREE.Group();
+for (const sx of [-0.35, 0.35]) {
+  const w = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.1), createToonMat(0xFFFFFF)); w.position.set(sx, 3.4, 0.71); eyesGroup.add(w);
+  const b = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.1), createToonMat(0x000000)); b.position.set(sx, 3.35, 0.76); eyesGroup.add(b);
+}
+playerVisuals.add(eyesGroup);
+
+const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, 0.4), createToonMat(0xFFCC99));
+leftArm.position.set(-0.9, 1.8, 0); leftArm.castShadow = true; addOutline(leftArm); playerVisuals.add(leftArm);
+const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, 0.4), createToonMat(0xFFCC99));
+rightArm.position.set(0.9, 1.8, 0); rightArm.castShadow = true; addOutline(rightArm); playerVisuals.add(rightArm);
+
+const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.2, 0.45), createToonMat(0x2C3E50));
+leftLeg.position.set(-0.3, 0.6, 0); leftLeg.castShadow = true; addOutline(leftLeg); playerVisuals.add(leftLeg);
+const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.2, 0.45), createToonMat(0x2C3E50));
+rightLeg.position.set(0.3, 0.6, 0); rightLeg.castShadow = true; addOutline(rightLeg); playerVisuals.add(rightLeg);
+
+player.position.copy(BASE_POS);
+scene.add(player);
+
+/* ============================================================
+   7. ЛОГИКА ИГРЫ (Инкубатор, Питомцы, Доход)
+============================================================ */
+let game = {
+  money: 0, baseSpeed: 6, treadmillSpeed: 0, treadmillMax: 100, onTreadmill: false,
+  hasEgg: false, carriedBiome: null,
+  eggs: [], pets: [], penSlots: 3
+};
+
+const keys = {};
+const joystick = { active: false, x: 0, y: 0 };
+const barEl = document.getElementById('bar');
+const barFill = document.getElementById('barfill');
+const eggTextEl = document.getElementById('egg');
+let holdProgress = 0;
+let carriedEggMesh = null;
+
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyQ') toggleTreadmill();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+
+function toggleTreadmill() {
+  if (game.onTreadmill) { game.onTreadmill = false; player.position.z += 7; return; }
+  const near = Math.abs(player.position.x - TREADMILL_POS.x) < 5 && Math.abs(player.position.z - TREADMILL_POS.z) < 7;
+  if (!near) return toast('Подойди к дорожке');
+  game.onTreadmill = true; player.position.x = TREADMILL_POS.x; player.position.z = TREADMILL_POS.z;
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.opacity = 1;
+  setTimeout(() => el.style.opacity = 0, 2000);
+}
+
+// --- КРАЖА ---
+function updateSteal(dt) {
+  if (game.hasEgg) { barEl.style.display = 'none'; return; }
+  let nearest = null, nearestDist = Infinity;
+  for (const b of biomes) {
+    if (b.eggTaken) continue;
+    const d = player.position.distanceTo(b.nestPos);
+    if (d < nearestDist) { nearestDist = d; nearest = b; }
+  }
+  if (nearest && nearestDist < 4) {
+    if (keys['KeyE']) {
+      holdProgress += dt / 1.5;
+      barEl.style.display = 'block';
+      barFill.style.width = Math.min(holdProgress * 100, 100) + '%';
+      if (holdProgress >= 1) stealEgg(nearest);
+    } else {
+      holdProgress = Math.max(0, holdProgress - dt * 2);
+      barEl.style.display = holdProgress > 0 ? 'block' : 'none';
+      barFill.style.width = (holdProgress * 100) + '%';
+    }
+  } else {
+    holdProgress = Math.max(0, holdProgress - dt * 2);
+    barEl.style.display = holdProgress > 0 ? 'block' : 'none';
+    barFill.style.width = (holdProgress * 100) + '%';
+  }
+}
+
+function stealEgg(biome) {
+  holdProgress = 0; barEl.style.display = 'none';
+  game.hasEgg = true; game.carriedBiome = biome;
+  biome.egg.visible = false; biome.eggTaken = true; biome.guardChasing = true;
+  eggTextEl.textContent = '✅ есть';
+  if (carriedEggMesh) player.remove(carriedEggMesh);
+  carriedEggMesh = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), createToonMat(biome.egg));
+  carriedEggMesh.scale.set(1, 1.4, 1); carriedEggMesh.position.set(0, 4.8, 0);
+  addOutline(carriedEggMesh); player.add(carriedEggMesh);
+  toast('🥚 Яйцо украдено! Беги на базу!');
+}
+
+function updateCarriedEgg() {
+  if (carriedEggMesh) {
+    carriedEggMesh.rotation.y += 0.05;
+    carriedEggMesh.position.y = 4.8 + Math.sin(performance.now() * 0.005) * 0.2;
+  }
+}
+
+// --- СТРАЖИ ---
+function updateGuards(dt) {
+  for (const b of biomes) {
+    if (!b.guard) continue;
+    const guard = b.guard;
+    if (b.guardChasing) {
+      const toPlayer = new THREE.Vector3().subVectors(player.position, guard.position);
+      toPlayer.y = 0;
+      const dist = toPlayer.length();
+      if (dist > 0.1) {
+        toPlayer.normalize();
+        guard.position.addScaledVector(toPlayer, (4 + b.index * 0.5) * dt);
+        guard.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+        guard.position.y = Math.abs(Math.sin(performance.now() * 0.01)) * 0.5;
+        if (dist < 3) caughtPlayer(b);
+      }
+    } else {
+      const toHome = new THREE.Vector3().subVectors(b.guardHome, guard.position);
+      toHome.y = 0;
+      if (toHome.length() > 0.5) {
+        toHome.normalize();
+        guard.position.addScaledVector(toHome, 2 * dt);
+        guard.rotation.y = Math.atan2(toHome.x, toHome.z);
+      }
+      guard.position.y = 0;
+    }
+  }
+}
+
+function caughtPlayer(biome) {
+  game.hasEgg = false; game.carriedBiome = null;
+  biome.guardChasing = false; biome.egg.visible = true; biome.eggTaken = false;
+  player.position.copy(BASE_POS);
+  if (carriedEggMesh) { player.remove(carriedEggMesh); carriedEggMesh = null; }
+  eggTextEl.textContent = 'нет';
+  toast('😱 Страж поймал! Яйцо потеряно.');
+}
+
+// --- SAFE ZONE (В инкубатор) ---
+function updateSafeZone() {
+  if (!game.hasEgg) return;
+  const dist = player.position.distanceTo(new THREE.Vector3(0, 0, BASE_Z - 5));
+  if (dist < SAFE_RADIUS) {
+    const b = game.carriedBiome;
+    b.eggTaken = false; b.guardChasing = false; b.egg.visible = true;
+    b.guard.position.copy(b.guardHome);
+    
+    game.hasEgg = false; game.carriedBiome = null;
+    if (carriedEggMesh) { player.remove(carriedEggMesh); carriedEggMesh = null; }
+    eggTextEl.textContent = 'нет';
+    
+    // Добавляем в инкубатор
+    game.eggs.push({
+      biome: b,
+      timeLeft: b.hatchTime,
+      totalTime: b.hatchTime,
+      ready: false
+    });
+    
+    toast(`✅ Яйцо доставлено! Вылупление ${b.hatchTime}с`);
+    updatePenUI();
+  }
+}
+
+// --- ВЫЛУПЛЕНИЕ ---
+function updateHatching(dt) {
+  let anyReady = false;
+  for (const egg of game.eggs) {
+    if (egg.ready) { anyReady = true; continue; }
+    egg.timeLeft -= dt;
+    if (egg.timeLeft <= 0) {
+      egg.timeLeft = 0;
+      egg.ready = true;
+      anyReady = true;
+    }
+  }
+  document.getElementById('hatch-indicator').classList.toggle('show', anyReady);
+}
+
+document.getElementById('hatch-indicator').addEventListener('click', () => {
+  const readyIdx = game.eggs.findIndex(e => e.ready);
+  if (readyIdx === -1) return;
+  if (game.pets.length >= game.penSlots) return toast('❌ Загон полон!');
+  
+  const egg = game.eggs[readyIdx];
+  game.eggs.splice(readyIdx, 1);
+  
+  // Шанс редкости (10% на x2 доход)
+  const isRare = Math.random() < 0.1;
+  const income = egg.biome.petIncome * (isRare ? 2 : 1);
+  
+  game.pets.push({
+    emoji: egg.biome.petEmoji,
+    income: income,
+    name: egg.biome.name
+  });
+  
+  toast(`🎉 ${egg.biome.petEmoji} в загоне! +$${income}/сек`);
+  rebuildPenVisuals();
+  updatePenUI();
+});
+
+// --- ПАССИВНЫЙ ДОХОД ---
+setInterval(() => {
+  const inc = game.pets.reduce((s, p) => s + p.income, 0);
+  if (inc > 0) game.money += inc;
+}, 1000);
+
+// --- ОТРИСОВКА ПИТОМЦЕВ В 3D ЗАГОНЕ ---
+const petModelsGroup = new THREE.Group();
+petModelsGroup.position.copy(PEN_CENTER);
+scene.add(petModelsGroup);
+
+function rebuildPenVisuals() {
+  while(petModelsGroup.children.length) petModelsGroup.remove(petModelsGroup.children[0]);
+  const R = PEN_RADIUS * 0.5;
+  game.pets.forEach((pet, i) => {
+    const angle = (i / game.penSlots) * Math.PI * 2;
+    const x = Math.cos(angle) * R, z = Math.sin(angle) * R;
+    
+    // Простая мультяшная зверушка
+    const g = new THREE.Group();
+    g.position.set(x, 0.8, z);
+    
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), createToonMat(0xFFCC99));
+    addOutline(body); g.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 12), createToonMat(0xFFCC99));
+    head.position.set(0, 0.6, 0.4); addOutline(head); g.add(head);
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), createToonMat(0x000000));
+    eyeL.position.set(-0.15, 0.7, 0.7); g.add(eyeL);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), createToonMat(0x000000));
+    eyeR.position.set(0.15, 0.7, 0.7); g.add(eyeR);
+    
+    g.userData.pet = pet;
+    g.userData.phase = i * 1.5;
+    petModelsGroup.add(g);
+  });
+}
+
+/* ============================================================
+   8. UI ЗАГОНА
+============================================================ */
+const penPanel = document.getElementById('pen-panel');
+document.getElementById('inv-btn').addEventListener('click', () => {
+  penPanel.classList.add('open');
+  updatePenUI();
+});
+
+function updatePenUI() {
+  const grid = document.getElementById('pen-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < game.penSlots; i++) {
+    const pet = game.pets[i];
+    const slot = document.createElement('div');
+    slot.className = 'pen-slot' + (pet ? ' filled' : '');
+    if (pet) {
+      slot.innerHTML = `<div class="icon">${pet.emoji}</div><div class="inc">+$${pet.income}/с</div>`;
+    } else {
+      slot.innerHTML = `<div style="font-size:24px; opacity:0.3;">+</div>`;
+    }
+    grid.appendChild(slot);
+  }
+
+  const list = document.getElementById('incubator-list');
+  list.innerHTML = '';
+  if (game.eggs.length === 0) {
+    list.innerHTML = '<div style="opacity:0.5; text-align:center;">Инкубатор пуст</div>';
+  }
+  game.eggs.forEach(egg => {
+    const div = document.createElement('div');
+    div.className = 'incubator-item';
+    const pct = ((1 - egg.timeLeft / egg.totalTime) * 100).toFixed(0);
+    div.innerHTML = `
+      ${egg.biome.petEmoji} ${egg.ready ? '<span style="color:#4CAF50;">ГОТОВО</span>' : egg.timeLeft.toFixed(0) + 'с'}
+      <div class="progress-bg"><div class="progress-fill" style="width:${egg.ready ? 100 : pct}%"></div></div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// Мобильное управление
+const joystickEl = document.getElementById('joystick');
+const joystickStick = document.getElementById('joystick-stick');
+const JOYSTICK_RADIUS = 60;
+
+function joystickTouchStart(e) { e.preventDefault(); joystick.active = true; updateJoystick(e.touches[0]); }
+function joystickTouchMove(e) { if (!joystick.active) return; e.preventDefault(); updateJoystick(e.touches[0]); }
+function joystickTouchEnd(e) { e.preventDefault(); joystick.active = false; joystick.x = 0; joystick.y = 0; joystickStick.style.transform = 'translate(-50%,-50%)'; }
+
+function updateJoystick(touch) {
+  const rect = joystickEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+  let dx = touch.clientX - cx, dy = touch.clientY - cy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist > JOYSTICK_RADIUS) { dx = (dx / dist) * JOYSTICK_RADIUS; dy = (dy / dist) * JOYSTICK_RADIUS; }
+  joystick.x = dx / JOYSTICK_RADIUS; joystick.y = dy / JOYSTICK_RADIUS;
+  joystickStick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+}
+
+if (joystickEl) {
+  joystickEl.addEventListener('touchstart', joystickTouchStart, { passive: false });
+  joystickEl.addEventListener('touchmove', joystickTouchMove, { passive: false });
+  joystickEl.addEventListener('touchend', joystickTouchEnd, { passive: false });
+}
+
+document.getElementById('btn-q').addEventListener('click', e => { e.preventDefault(); toggleTreadmill(); });
+document.getElementById('btn-f').addEventListener('click', e => { e.preventDefault(); toast('Ускорение (в разработке)'); });
+const btnE = document.getElementById('btn-e');
+btnE.addEventListener('touchstart', e => { e.preventDefault(); keys['KeyE'] = true; }, { passive: false });
+btnE.addEventListener('touchend', e => { e.preventDefault(); keys['KeyE'] = false; }, { passive: false });
+
+/* ============================================================
+   9. ЦИКЛ
+============================================================ */
+const clock = new THREE.Clock();
+let walkPhase = 0, blinkTimer = 0;
+
+const cam = { yaw: 0, pitch: 0.45, distance: 15, targetY: 2 };
+let mouseDown = false, lastX = 0, lastY = 0;
+renderer.domElement.addEventListener('mousedown', e => { mouseDown = true; lastX = e.clientX; lastY = e.clientY; });
+addEventListener('mouseup', () => mouseDown = false);
+addEventListener('mousemove', e => {
+  if (!mouseDown) return;
+  cam.yaw -= (e.clientX - lastX) * 0.005; cam.pitch -= (e.clientY - lastY) * 0.005;
+  cam.pitch = THREE.MathUtils.clamp(cam.pitch, 0.1, 1.4);
+  lastX = e.clientX; lastY = e.clientY;
+});
+
+let camTouchId = null, camTouchLastX = 0, camTouchLastY = 0;
+renderer.domElement.addEventListener('touchstart', e => {
+  if (e.target.closest('#joystick') || e.target.closest('.action-btn')) return;
+  if (camTouchId === null && e.touches.length > 0) {
+    const t = e.touches[0]; camTouchId = t.identifier; camTouchLastX = t.clientX; camTouchLastY = t.clientY;
+  }
+}, { passive: true });
+renderer.domElement.addEventListener('touchmove', e => {
+  if (camTouchId === null) return;
+  for (const t of e.touches) {
+    if (t.identifier !== camTouchId) continue;
+    cam.yaw -= (t.clientX - camTouchLastX) * 0.008; cam.pitch -= (t.clientY - camTouchLastY) * 0.008;
+    cam.pitch = THREE.MathUtils.clamp(cam.pitch, 0.1, 1.4);
+    camTouchLastX = t.clientX; camTouchLastY = t.clientY; break;
+  }
+}, { passive: true });
+renderer.domElement.addEventListener('touchend', e => {
+  for (const t of e.changedTouches) if (t.identifier === camTouchId) { camTouchId = null; break; }
+}, { passive: true });
+
+function updateAtmosphere(dt) {
+  const pz = player.position.z;
+  let currentBiome = null;
+  for (const b of biomes) { if (pz >= b.zStart && pz <= b.zEnd) { currentBiome = b; break; } }
+  const targetSky = currentBiome ? new THREE.Color(currentBiome.sky) : new THREE.Color(0x87CEEB);
+  const targetFog = currentBiome ? new THREE.Color(currentBiome.fog) : new THREE.Color(0x87CEEB);
+  scene.background.lerp(targetSky, 1 - Math.pow(0.01, dt));
+  scene.fog.color.lerp(targetFog, 1 - Math.pow(0.01, dt));
+}
+
+function updatePlayer(dt) {
+  let isMoving = false;
+  if (game.onTreadmill) {
+    player.position.x = TREADMILL_POS.x; player.position.z = TREADMILL_POS.z;
+    game.treadmillSpeed = Math.min(game.treadmillMax, game.treadmillSpeed + dt * 2);
+    if (keys['KeyW'] || joystick.y < -0.1) { walkPhase += dt * 15; isMoving = true; }
+  } else {
+    let x = 0, z = 0;
+    if (keys['KeyW']) z -= 1; if (keys['KeyS']) z += 1;
+    if (keys['KeyA']) x -= 1; if (keys['KeyD']) x += 1;
+    if (joystick.active) { x += joystick.x; z += joystick.y; }
+    const mag = Math.sqrt(x*x + z*z);
+    if (mag > 0.1) {
+      isMoving = true;
+      const forward = new THREE.Vector3(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
+      const right = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+      const moveDir = new THREE.Vector3().addScaledVector(forward, -z).addScaledVector(right, x).normalize();
+      player.position.addScaledVector(moveDir, (game.baseSpeed + game.treadmillSpeed) * dt);
+      player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+      walkPhase += dt * (game.baseSpeed + game.treadmillSpeed) * 1.5;
+    }
+  }
+
+  if (isMoving) {
+    leftLeg.rotation.x = Math.sin(walkPhase) * 0.8;
+    rightLeg.rotation.x = Math.sin(walkPhase + Math.PI) * 0.8;
+    leftArm.rotation.x = Math.sin(walkPhase + Math.PI) * 0.8;
+    rightArm.rotation.x = Math.sin(walkPhase) * 0.8;
+    playerVisuals.position.y = Math.abs(Math.sin(walkPhase)) * 0.2;
+  } else {
+    playerVisuals.position.y = Math.sin(performance.now() * 0.003) * 0.05;
+    leftLeg.rotation.x = 0; rightLeg.rotation.x = 0;
+    leftArm.rotation.x = Math.sin(performance.now() * 0.003) * 0.1;
+    rightArm.rotation.x = Math.sin(performance.now() * 0.003) * 0.1;
+  }
+
+  blinkTimer += dt;
+  if (blinkTimer > 2.5) {
+    blinkTimer = 0; eyesGroup.scale.y = 0.1;
+    setTimeout(() => { eyesGroup.scale.y = 1; }, 150);
+  }
+
+  const cx = player.position.x + cam.distance * Math.sin(cam.yaw) * Math.cos(cam.pitch);
+  const cz = player.position.z + cam.distance * Math.cos(cam.yaw) * Math.cos(cam.pitch);
+  const cy = player.position.y + cam.targetY + cam.distance * Math.sin(cam.pitch);
+  camera.position.lerp(new THREE.Vector3(cx, cy, cz), 10 * dt);
+  camera.lookAt(player.position.x, player.position.y + cam.targetY, player.position.z);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  updateAtmosphere(dt);
+  updatePlayer(dt);
+  updateSteal(dt);
+  updateCarriedEgg();
+  updateGuards(dt);
+  updateSafeZone();
+  updateHatching(dt);
+
+  biomes.forEach(b => {
+    if (b.egg && b.egg.visible) {
+      b.egg.rotation.y += dt * 2;
+      b.egg.position.y = 1.8 + Math.sin(performance.now() * 0.003 + b.index) * 0.2;
+    }
+  });
+
+  // Анимация питомцев в 3D
+  petModelsGroup.children.forEach((child, i) => {
+    child.rotation.y += dt * 0.5;
+    child.position.y = 0.8 + Math.sin(performance.now() * 0.003 + child.userData.phase) * 0.1;
+  });
+
+  renderer.render(scene, camera);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// Обновление HUD
+setInterval(() => {
+  document.getElementById('money').textContent = Math.floor(game.money);
+  document.getElementById('speed').textContent = (game.baseSpeed + game.treadmillSpeed).toFixed(1);
+  document.getElementById('pets').textContent = `${game.pets.length}/${game.penSlots}`;
+  const inc = game.pets.reduce((s, p) => s + p.income, 0);
+  document.getElementById('income').textContent = inc;
+}, 100);
+
+setTimeout(() => document.getElementById('loading').classList.add('done'), 500);
+animate();
+</script>
+</body>
+</html>
